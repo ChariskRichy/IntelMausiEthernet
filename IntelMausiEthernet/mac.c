@@ -421,66 +421,61 @@ void e1000e_clear_hw_cntrs_base(struct e1000_hw *hw)
  *  Checks to see of the link status of the hardware has changed.  If a
  *  change in link status has been detected, then we read the PHY registers
  *  to get the current speed/duplex if link exists.
- *
- *  Returns a negative error code (-E1000_ERR_*) or 0 (link down) or 1 (link
- *  up).
  **/
 s32 e1000e_check_for_copper_link(struct e1000_hw *hw)
 {
-	struct e1000_mac_info *mac = &hw->mac;
-	s32 ret_val;
-	bool link;
+    struct e1000_mac_info *mac = &hw->mac;
+    s32 ret_val;
+    bool link;
 
-	/* We only want to go out to the PHY registers to see if Auto-Neg
-	 * has completed and/or if our link status has changed.  The
-	 * get_link_status flag is set upon receiving a Link Status
-	 * Change or Rx Sequence Error interrupt.
-	 */
-	if (!mac->get_link_status)
-		return 1;
+    /* We only want to go out to the PHY registers to see if Auto-Neg
+     * has completed and/or if our link status has changed.  The
+     * get_link_status flag is set upon receiving a Link Status
+     * Change or Rx Sequence Error interrupt.
+     */
+    if (!mac->get_link_status)
+        return 0;
+    mac->get_link_status = false;
 
-	/* First we want to see if the MII Status Register reports
-	 * link.  If so, then we want to get the current speed/duplex
-	 * of the PHY.
-	 */
-	ret_val = e1000e_phy_has_link_generic(hw, 1, 0, &link);
-	if (ret_val)
-		return ret_val;
+    /* First we want to see if the MII Status Register reports
+     * link.  If so, then we want to get the current speed/duplex
+     * of the PHY.
+     */
+    ret_val = e1000e_phy_has_link_generic(hw, 1, 0, &link);
+    if (ret_val || !link)
+        goto out;
 
-	if (!link)
-		return 0;	/* No link detected */
+    /* Check if there was DownShift, must be checked
+     * immediately after link-up
+     */
+    e1000e_check_downshift(hw);
 
-	mac->get_link_status = false;
+    /* If we are forcing speed/duplex, then we simply return since
+     * we have already determined whether we have link or not.
+     */
+    if (!mac->autoneg)
+        return -E1000_ERR_CONFIG;
 
-	/* Check if there was DownShift, must be checked
-	 * immediately after link-up
-	 */
-	e1000e_check_downshift(hw);
+    /* Auto-Neg is enabled.  Auto Speed Detection takes care
+     * of MAC speed/duplex configuration.  So we only need to
+     * configure Collision Distance in the MAC.
+     */
+    mac->ops.config_collision_dist(hw);
 
-	/* If we are forcing speed/duplex, then we simply return since
-	 * we have already determined whether we have link or not.
-	 */
-	if (!mac->autoneg)
-		return -E1000_ERR_CONFIG;
+    /* Configure Flow Control now that Auto-Neg has completed.
+     * First, we need to restore the desired flow control
+     * settings because we may have had to re-autoneg with a
+     * different link partner.
+     */
+    ret_val = e1000e_config_fc_after_link_up(hw);
+    if (ret_val)
+        e_dbg("Error configuring flow control\n");
 
-	/* Auto-Neg is enabled.  Auto Speed Detection takes care
-	 * of MAC speed/duplex configuration.  So we only need to
-	 * configure Collision Distance in the MAC.
-	 */
-	mac->ops.config_collision_dist(hw);
+    return ret_val;
 
-	/* Configure Flow Control now that Auto-Neg has completed.
-	 * First, we need to restore the desired flow control
-	 * settings because we may have had to re-autoneg with a
-	 * different link partner.
-	 */
-	ret_val = e1000e_config_fc_after_link_up(hw);
-	if (ret_val) {
-		e_dbg("Error configuring flow control\n");
-		return ret_val;
-	}
-
-	return 1;
+out:
+    mac->get_link_status = true;
+    return ret_val;
 }
 
 /**
@@ -974,52 +969,52 @@ s32 e1000e_set_fc_watermarks(struct e1000_hw *hw)
  **/
 s32 e1000e_force_mac_fc(struct e1000_hw *hw)
 {
-	u32 ctrl;
+    u32 ctrl;
 
-	ctrl = er32(CTRL);
+    ctrl = er32(CTRL);
 
-	/* Because we didn't get link via the internal auto-negotiation
-	 * mechanism (we either forced link or we got link via PHY
-	 * auto-neg), we have to manually enable/disable transmit an
-	 * receive flow control.
-	 *
-	 * The "Case" statement below enables/disable flow control
-	 * according to the "hw->fc.current_mode" parameter.
-	 *
-	 * The possible values of the "fc" parameter are:
-	 *      0:  Flow control is completely disabled
-	 *      1:  Rx flow control is enabled (we can receive pause
-	 *          frames but not send pause frames).
-	 *      2:  Tx flow control is enabled (we can send pause frames
-	 *          frames but we do not receive pause frames).
-	 *      3:  Both Rx and Tx flow control (symmetric) is enabled.
-	 *  other:  No other values should be possible at this point.
-	 */
-	e_dbg("hw->fc.current_mode = %u\n", hw->fc.current_mode);
+    /* Because we didn't get link via the internal auto-negotiation
+     * mechanism (we either forced link or we got link via PHY
+     * auto-neg), we have to manually enable/disable transmit an
+     * receive flow control.
+     *
+     * The "Case" statement below enables/disable flow control
+     * according to the "hw->fc.current_mode" parameter.
+     *
+     * The possible values of the "fc" parameter are:
+     *      0:  Flow control is completely disabled
+     *      1:  Rx flow control is enabled (we can receive pause
+     *          frames but not send pause frames).
+     *      2:  Tx flow control is enabled (we can send pause frames
+     *          but we do not receive pause frames).
+     *      3:  Both Rx and Tx flow control (symmetric) is enabled.
+     *  other:  No other values should be possible at this point.
+     */
+    e_dbg("hw->fc.current_mode = %u\n", hw->fc.current_mode);
 
-	switch (hw->fc.current_mode) {
-	case e1000_fc_none:
-		ctrl &= (~(E1000_CTRL_TFCE | E1000_CTRL_RFCE));
-		break;
-	case e1000_fc_rx_pause:
-		ctrl &= (~E1000_CTRL_TFCE);
-		ctrl |= E1000_CTRL_RFCE;
-		break;
-	case e1000_fc_tx_pause:
-		ctrl &= (~E1000_CTRL_RFCE);
-		ctrl |= E1000_CTRL_TFCE;
-		break;
-	case e1000_fc_full:
-		ctrl |= (E1000_CTRL_TFCE | E1000_CTRL_RFCE);
-		break;
-	default:
-		e_dbg("Flow control param set incorrectly\n");
-		return -E1000_ERR_CONFIG;
-	}
+    switch (hw->fc.current_mode) {
+    case e1000_fc_none:
+        ctrl &= (~(E1000_CTRL_TFCE | E1000_CTRL_RFCE));
+        break;
+    case e1000_fc_rx_pause:
+        ctrl &= (~E1000_CTRL_TFCE);
+        ctrl |= E1000_CTRL_RFCE;
+        break;
+    case e1000_fc_tx_pause:
+        ctrl &= (~E1000_CTRL_RFCE);
+        ctrl |= E1000_CTRL_TFCE;
+        break;
+    case e1000_fc_full:
+        ctrl |= (E1000_CTRL_TFCE | E1000_CTRL_RFCE);
+        break;
+    default:
+        e_dbg("Flow control param set incorrectly\n");
+        return -E1000_ERR_CONFIG;
+    }
 
-	ew32(CTRL, ctrl);
+    ew32(CTRL, ctrl);
 
-	return 0;
+    return 0;
 }
 
 /**
@@ -1387,45 +1382,45 @@ s32 e1000e_get_speed_and_duplex_fiber_serdes(struct e1000_hw __always_unused
  **/
 s32 e1000e_get_hw_semaphore(struct e1000_hw *hw)
 {
-	u32 swsm;
-	s32 timeout = hw->nvm.word_size + 1;
-	s32 i = 0;
+    u32 swsm;
+    s32 timeout = hw->nvm.word_size + 1;
+    s32 i = 0;
 
-	/* Get the SW semaphore */
-	while (i < timeout) {
-		swsm = er32(SWSM);
-		if (!(swsm & E1000_SWSM_SMBI))
-			break;
+    /* Get the SW semaphore */
+    while (i < timeout) {
+        swsm = er32(SWSM);
+        if (!(swsm & E1000_SWSM_SMBI))
+            break;
 
-		usleep_range(50, 100);
-		i++;
-	}
+        udelay(100);
+        i++;
+    }
 
-	if (i == timeout) {
-		e_dbg("Driver can't access device - SMBI bit is set.\n");
-		return -E1000_ERR_NVM;
-	}
+    if (i == timeout) {
+        e_dbg("Driver can't access device - SMBI bit is set.\n");
+        return -E1000_ERR_NVM;
+    }
 
-	/* Get the FW semaphore. */
-	for (i = 0; i < timeout; i++) {
-		swsm = er32(SWSM);
-		ew32(SWSM, swsm | E1000_SWSM_SWESMBI);
+    /* Get the FW semaphore. */
+    for (i = 0; i < timeout; i++) {
+        swsm = er32(SWSM);
+        ew32(SWSM, swsm | E1000_SWSM_SWESMBI);
 
-		/* Semaphore acquired if bit latched */
-		if (er32(SWSM) & E1000_SWSM_SWESMBI)
-			break;
+        /* Semaphore acquired if bit latched */
+        if (er32(SWSM) & E1000_SWSM_SWESMBI)
+            break;
 
-		usleep_range(50, 100);
-	}
+        udelay(100);
+    }
 
-	if (i == timeout) {
-		/* Release semaphores */
-		e1000e_put_hw_semaphore(hw);
-		e_dbg("Driver can't access the NVM\n");
-		return -E1000_ERR_NVM;
-	}
+    if (i == timeout) {
+        /* Release semaphores */
+        e1000e_put_hw_semaphore(hw);
+        e_dbg("Driver can't access the NVM\n");
+        return -E1000_ERR_NVM;
+    }
 
-	return 0;
+    return 0;
 }
 
 /**

@@ -53,6 +53,7 @@
 
 /* Extended Device Control */
 #define E1000_CTRL_EXT_LPCD  0x00000004     /* LCD Power Cycle Done */
+#define E1000_CTRL_EXT_DPG_EN    0x00000008 /* Dynamic Power Gating Enable */
 #define E1000_CTRL_EXT_SDP3_DATA 0x00000080 /* Value of SW Definable Pin 3 */
 #define E1000_CTRL_EXT_FORCE_SMBUS 0x00000800 /* Force SMBus mode */
 #define E1000_CTRL_EXT_EE_RST    0x00002000 /* Reinitialize from EEPROM */
@@ -242,6 +243,9 @@
 #define E1000_STATUS_PHYRA      0x00000400      /* PHY Reset Asserted */
 #define E1000_STATUS_GIO_MASTER_ENABLE	0x00080000	/* Master Req status */
 
+/* PCIm function state */
+#define E1000_STATUS_PCIM_STATE    0x40000000
+
 #define HALF_DUPLEX 1
 #define FULL_DUPLEX 2
 
@@ -402,14 +406,18 @@
 #define E1000_ICR_RXDMT0        0x00000010 /* Rx desc min. threshold (0) */
 #define E1000_ICR_RXO           0x00000040 /* Receiver Overrun */
 #define E1000_ICR_RXT0          0x00000080 /* Rx timer intr (ring 0) */
+#define E1000_ICR_MDAC          0x00000200 /* MDIO Access Complete */
+#define E1000_ICR_SRPD          0x00010000 /* Small Receive Packet Detected */
+#define E1000_ICR_ACK           0x00020000 /* Receive ACK Frame Detected */
+#define E1000_ICR_MNG           0x00040000 /* Manageability Event Detected */
 #define E1000_ICR_ECCER         0x00400000 /* Uncorrectable ECC Error */
 /* If this bit asserted, the driver should claim the interrupt */
-#define E1000_ICR_INT_ASSERTED	0x80000000
+#define E1000_ICR_INT_ASSERTED    0x80000000
 #define E1000_ICR_RXQ0          0x00100000 /* Rx Queue 0 Interrupt */
 #define E1000_ICR_RXQ1          0x00200000 /* Rx Queue 1 Interrupt */
 #define E1000_ICR_TXQ0          0x00400000 /* Tx Queue 0 Interrupt */
 #define E1000_ICR_TXQ1          0x00800000 /* Tx Queue 1 Interrupt */
-#define E1000_ICR_OTHER         0x01000000 /* Other Interrupts */
+#define E1000_ICR_OTHER         0x01000000 /* Other Interrupt */
 
 /* PBA ECC Register */
 #define E1000_PBA_ECC_COUNTER_MASK  0xFFF00000 /* ECC counter mask */
@@ -432,6 +440,16 @@
 	E1000_IMS_RXDMT0 |    \
 	E1000_IMS_RXSEQ  |    \
 	E1000_IMS_LSC)
+
+/* These are all of the events related to the OTHER interrupt.
+ */
+#define IMS_OTHER_MASK ( \
+    E1000_IMS_LSC  | \
+    E1000_IMS_RXO  | \
+    E1000_IMS_MDAC | \
+    E1000_IMS_SRPD | \
+    E1000_IMS_ACK  | \
+    E1000_IMS_MNG)
 
 /* Interrupt Mask Set */
 #define E1000_IMS_TXDW      E1000_ICR_TXDW      /* Transmit desc written back */
@@ -636,6 +654,9 @@
 /* For checksumming, the sum of all words in the NVM should equal 0xBABA. */
 #define NVM_SUM                    0xBABA
 
+/* Uninitialized ("empty") checksum word value */
+#define NVM_CHECKSUM_UNINITIALIZED 0xFFFF
+
 /* PBA (printed board assembly) number words */
 #define NVM_PBA_OFFSET_0           8
 #define NVM_PBA_OFFSET_1           9
@@ -805,5 +826,8 @@
 
 /* SerDes Control */
 #define E1000_GEN_POLL_TIMEOUT          640
+
+#define E1000_FEXTNVM12_PHYPD_CTRL_MASK    0x00C00000
+#define E1000_FEXTNVM12_PHYPD_CTRL_P1    0x00800000
 
 #endif /* _E1000_DEFINES_H_ */

@@ -107,6 +107,24 @@ static const struct intelDevice deviceTable[] = {
     { .pciDevId = E1000_DEV_ID_PCH_ADP_I219_V16, .device = board_pch_adp, .deviceName = "I219V16", .deviceInfo = &e1000_pch_adp_info },
     { .pciDevId = E1000_DEV_ID_PCH_ADP_I219_LM17, .device = board_pch_adp, .deviceName = "I219LM17", .deviceInfo = &e1000_pch_adp_info },
     { .pciDevId = E1000_DEV_ID_PCH_ADP_I219_V17, .device = board_pch_adp, .deviceName = "I219V17", .deviceInfo = &e1000_pch_adp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_RPL_I219_LM22, .device = board_pch_adp, .deviceName = "I219LM22", .deviceInfo = &e1000_pch_adp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_RPL_I219_V22, .device = board_pch_adp, .deviceName = "I219V22", .deviceInfo = &e1000_pch_adp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_ADP_I219_LM19, .device = board_pch_adp, .deviceName = "I219LM19", .deviceInfo = &e1000_pch_adp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_ADP_I219_V19, .device = board_pch_adp, .deviceName = "I219V19", .deviceInfo = &e1000_pch_adp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_MTP_I219_LM18, .device = board_pch_mtp, .deviceName = "I219LM18", .deviceInfo = &e1000_pch_mtp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_MTP_I219_V18, .device = board_pch_mtp, .deviceName = "I219V18", .deviceInfo = &e1000_pch_mtp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_LNP_I219_LM20, .device = board_pch_mtp, .deviceName = "I219LM20", .deviceInfo = &e1000_pch_mtp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_LNP_I219_V20, .device = board_pch_mtp, .deviceName = "I219V20", .deviceInfo = &e1000_pch_mtp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_LNP_I219_LM21, .device = board_pch_mtp, .deviceName = "I219LM21", .deviceInfo = &e1000_pch_mtp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_LNP_I219_V21, .device = board_pch_mtp, .deviceName = "I219V21", .deviceInfo = &e1000_pch_mtp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_ARL_I219_LM24, .device = board_pch_mtp, .deviceName = "I219LM24", .deviceInfo = &e1000_pch_mtp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_ARL_I219_V24, .device = board_pch_mtp, .deviceName = "I219V24", .deviceInfo = &e1000_pch_mtp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_PTP_I219_LM25, .device = board_pch_ptp, .deviceName = "I219LM25", .deviceInfo = &e1000_pch_ptp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_PTP_I219_V25, .device = board_pch_ptp, .deviceName = "I219V25", .deviceInfo = &e1000_pch_ptp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_PTP_I219_LM27, .device = board_pch_ptp, .deviceName = "I219LM27", .deviceInfo = &e1000_pch_ptp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_PTP_I219_V27, .device = board_pch_ptp, .deviceName = "I219V27", .deviceInfo = &e1000_pch_ptp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_NVL_I219_LM29, .device = board_pch_ptp, .deviceName = "I219LM29", .deviceInfo = &e1000_pch_ptp_info },
+    { .pciDevId = E1000_DEV_ID_PCH_NVL_I219_V29, .device = board_pch_ptp, .deviceName = "I219V29", .deviceInfo = &e1000_pch_ptp_info },
     /* end of table */
     { .pciDevId = 0, .device = 0, .deviceName = NULL, .deviceInfo = NULL }
 };
@@ -1051,15 +1069,9 @@ IOReturn IntelMausi::getPacketFilters(const OSSymbol *group, UInt32 *filters) co
     DebugLog("getPacketFilters() ===>\n");
     
     if ((group == gIOEthernetWakeOnLANFilterGroup) && wolCapable) {
-        if (enableWoM) {
-            *filters = (kIOEthernetWakeOnMagicPacket | kIOEthernetWakeOnPacketAddressMatch);
-            
-            DebugLog("kIOEthernetWakeOnMagicPacket and kIOEthernetWakeOnPacketAddressMatch added to filters.\n");
-        } else {
-            *filters = kIOEthernetWakeOnMagicPacket;
-            
-            DebugLog("kIOEthernetWakeOnMagicPacket added to filters.\n");
-        }
+        *filters = kIOEthernetWakeOnMagicPacket;
+        
+        DebugLog("kIOEthernetWakeOnMagicPacket added to filters.\n");
     } else {
         result = super::getPacketFilters(group, filters);
     }

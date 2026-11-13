@@ -143,7 +143,9 @@ enum e1000_boards {
 	board_pch_spt,
 	board_pch_cnp,
     board_pch_tgp,
-    board_pch_adp
+    board_pch_adp,
+    board_pch_mtp,
+    board_pch_ptp,
 };
 
 struct e1000_ps_page {
@@ -424,22 +426,26 @@ s32 e1000e_get_base_timinca(struct e1000_adapter *adapter, u32 *timinca);
  * INCVALUE_n into the TIMINCA register allowing 32+8+(24-INCVALUE_SHIFT_n)
  * bits to count nanoseconds leaving the rest for fractional nonseconds.
  */
-#define INCVALUE_96MHZ		125
-#define INCVALUE_SHIFT_96MHZ	17
-#define INCPERIOD_SHIFT_96MHZ	2
-#define INCPERIOD_96MHZ		(12 >> INCPERIOD_SHIFT_96MHZ)
+#define INCVALUE_96MHZ        125
+#define INCVALUE_SHIFT_96MHZ    17
+#define INCPERIOD_SHIFT_96MHZ    2
+#define INCPERIOD_96MHZ        (12 >> INCPERIOD_SHIFT_96MHZ)
+#define MAX_PPB_96MHZ        23999900 /* 23,999,900 ppb */
 
-#define INCVALUE_25MHZ		40
-#define INCVALUE_SHIFT_25MHZ	18
-#define INCPERIOD_25MHZ		1
+#define INCVALUE_25MHZ        40
+#define INCVALUE_SHIFT_25MHZ    18
+#define INCPERIOD_25MHZ        1
+#define MAX_PPB_25MHZ        599999900 /* 599,999,900 ppb */
 
-#define INCVALUE_24MHZ		125
-#define INCVALUE_SHIFT_24MHZ	14
-#define INCPERIOD_24MHZ		3
+#define INCVALUE_24MHZ        125
+#define INCVALUE_SHIFT_24MHZ    14
+#define INCPERIOD_24MHZ        3
+#define MAX_PPB_24MHZ        999999999 /* 999,999,999 ppb */
 
-#define INCVALUE_38400KHZ	26
-#define INCVALUE_SHIFT_38400KHZ	19
-#define INCPERIOD_38400KHZ	1
+#define INCVALUE_38400KHZ    26
+#define INCVALUE_SHIFT_38400KHZ    19
+#define INCPERIOD_38400KHZ    1
+#define MAX_PPB_38400KHZ    230769100 /* 230,769,100 ppb */
 
 /* Another drawback of scaling the incvalue by a large factor is the
  * 64-bit SYSTIM register overflows more quickly.  This is dealt with
@@ -503,6 +509,8 @@ s32 e1000e_get_base_timinca(struct e1000_adapter *adapter, u32 *timinca);
 #define FLAG2_DFLT_CRC_STRIPPING          BIT(12)
 #define FLAG2_CHECK_RX_HWTSTAMP           BIT(13)
 #define FLAG2_CHECK_SYSTIM_OVERFLOW       BIT(14)
+#define FLAG2_ENABLE_S0IX_FLOWS           BIT(15)
+#define FLAG2_DISABLE_K1           BIT(16)
 
 #define E1000_RX_DESC_PS(R, i)	    \
 	(&(((union e1000_rx_desc_packet_split *)((R).desc))[i]))
@@ -579,6 +587,8 @@ extern const struct e1000_info e1000_pch_spt_info;
 extern const struct e1000_info e1000_pch_cnp_info;
 extern const struct e1000_info e1000_pch_tgp_info;
 extern const struct e1000_info e1000_pch_adp_info;
+extern const struct e1000_info e1000_pch_mtp_info;
+extern const struct e1000_info e1000_pch_ptp_info;
 extern const struct e1000_info e1000_es2_info;
 
 #if DISABLED_CODE
@@ -661,7 +671,7 @@ static inline u32 __er32(struct e1000_hw *hw, unsigned long reg)
 
 #define er32(reg)	__er32(hw, E1000_##reg)
 
-s32 __ew32_prepare(struct e1000_hw *hw);
+void __ew32_prepare(struct e1000_hw *hw);
 void __ew32(struct e1000_hw *hw, unsigned long reg, u32 val);
 
 #define ew32(reg, val)	__ew32(hw, E1000_##reg, (val))

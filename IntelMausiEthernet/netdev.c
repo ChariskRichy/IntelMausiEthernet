@@ -78,6 +78,28 @@ static const struct e1000_info *e1000_info_tbl[] = {
 	[board_pch_lpt]		= &e1000_pch_lpt_info,
 	[board_pch_spt]		= &e1000_pch_spt_info,
 	[board_pch_cnp]		= &e1000_pch_cnp_info,
+    [board_pch_tgp]        = &e1000_pch_tgp_info,
+    [board_pch_adp]        = &e1000_pch_adp_info,
+    [board_pch_mtp]        = &e1000_pch_mtp_info,
+    [board_pch_ptp]        = &e1000_pch_ptp_info,
+};
+
+static const struct dmi_system_id disable_k1_list[] = {
+    {
+        .ident = "Dell Pro 16 Plus PB16250",
+        .matches = {
+            DMI_MATCH(DMI_SYS_VENDOR, "Dell Inc."),
+            DMI_MATCH(DMI_PRODUCT_NAME, "Dell Pro 16 Plus PB16250"),
+        },
+    },
+    {
+        .ident = "Lenovo ThinkPad P14s Gen 5",
+        .matches = {
+            DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
+            DMI_MATCH(DMI_PRODUCT_VERSION, "ThinkPad P14s Gen 5"),
+        },
+    },
+    {}
 };
 
 struct e1000_reg_info {
@@ -145,14 +167,12 @@ static const struct e1000_reg_info e1000_reg_info_tbl[] = {
  * has bit 24 set while ME is accessing MAC CSR registers, wait if it is set
  * and try again a number of times.
  **/
-s32 __ew32_prepare(struct e1000_hw *hw)
+void __ew32_prepare(struct e1000_hw *hw)
 {
-	s32 i = E1000_ICH_FWSM_PCIM2PCI_COUNT;
+    s32 i = E1000_ICH_FWSM_PCIM2PCI_COUNT;
 
-	while ((er32(FWSM) & E1000_ICH_FWSM_PCIM2PCI) && --i)
-		udelay(50);
-
-	return i;
+    while ((er32(FWSM) & E1000_ICH_FWSM_PCIM2PCI) && --i)
+        udelay(50);
 }
 
 void __ew32(struct e1000_hw *hw, unsigned long reg, u32 val)

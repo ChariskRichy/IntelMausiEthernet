@@ -255,7 +255,6 @@ enum
 #define kEnableTSO4Name "enableTSO4"
 #define kEnableTSO6Name "enableTSO6"
 #define kEnableCSO6Name "enableCSO6"
-#define kEnableWoMName "enableWakeOnAddrMatch"
 #define kEnableWakeS5Name "enableWakeS5"
 #define kIntrRate10Name "maxIntrRate10"
 #define kIntrRate100Name "maxIntrRate100"
@@ -318,27 +317,6 @@ typedef struct intelRxMapInfo {
 struct IntelRxDesc {
     UInt64 bufferAddr;
     UInt64 status;
-};
-
-/*
- * Keep alive address data as supported by hardware with a
- * maximum of:
- *  3 IPv4 addresses
- *  4 IPv6 addresses
- */
-#define kMaxAddrV4 3
-#define kMaxAddrV6 4
-
-#define kLLAPrefix  0xfe800000
-#define kLLAMask    0xffc00000
-#define kULAPrefix  0xfc000000
-#define kULAMask    0xfe000000
-
-struct IntelAddrData {
-    UInt16 ipV6Count;
-    UInt16 ipV4Count;
-    struct in6_addr ipV6Addr[kMaxAddrV6];
-    UInt32 ipV4Addr[kMaxAddrV4];
 };
 
 /**
@@ -497,8 +475,8 @@ private:
     void intelFlushRxRing(struct e1000_adapter *adapter);
     void intelFlushDescRings(struct e1000_adapter *adapter);
     void intelPhyReadStatus(struct e1000_adapter *adapter);
-    void intelInitPhyWakeup(UInt32 wufc, struct IntelAddrData *addrData);
-    void intelInitMacWakeup(UInt32 wufc, struct IntelAddrData *addrData);
+    void intelInitPhyWakeup(UInt32 wufc);
+    void intelInitMacWakeup(UInt32 wufc);
     void intelSetupAdvForMedium(const IONetworkMedium *medium);
     void intelFlushLPIC();
     void setMaxLatency(UInt32 linkSpeed);
@@ -507,8 +485,6 @@ private:
     SInt32 intelEnableEEE(struct e1000_hw *hw, UInt16 mode);
     
     void intelGetChecksumResult(mbuf_t m, UInt32 status);
-
-    void getAddressList(struct IntelAddrData *addr);
 
     /* timer action */
     void timerAction(IOTimerEventSource *timer);
@@ -613,7 +589,6 @@ private:
     bool enableTSO4;
     bool enableTSO6;
     bool enableCSO6;
-    bool enableWoM;
     bool enableWakeS5;
     bool useAppleVTD;
 };

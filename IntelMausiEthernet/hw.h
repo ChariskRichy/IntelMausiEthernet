@@ -128,10 +128,20 @@ struct e1000_hw;
 #define E1000_DEV_ID_PCH_MTP_I219_V18       0x550B
 #define E1000_DEV_ID_PCH_MTP_I219_LM19      0x550C
 #define E1000_DEV_ID_PCH_MTP_I219_V19       0x550D
+#define E1000_DEV_ID_PCH_ADP_I219_LM19      0x550C
+#define E1000_DEV_ID_PCH_ADP_I219_V19       0x550D
 #define E1000_DEV_ID_PCH_LNP_I219_LM20      0x550E
 #define E1000_DEV_ID_PCH_LNP_I219_V20       0x550F
 #define E1000_DEV_ID_PCH_LNP_I219_LM21      0x5510
 #define E1000_DEV_ID_PCH_LNP_I219_V21       0x5511
+#define E1000_DEV_ID_PCH_ARL_I219_LM24      0x57A0
+#define E1000_DEV_ID_PCH_ARL_I219_V24       0x57A1
+#define E1000_DEV_ID_PCH_PTP_I219_LM25      0x57B3
+#define E1000_DEV_ID_PCH_PTP_I219_V25       0x57B4
+#define E1000_DEV_ID_PCH_PTP_I219_LM27      0x57B7
+#define E1000_DEV_ID_PCH_PTP_I219_V27       0x57B8
+#define E1000_DEV_ID_PCH_NVL_I219_LM29      0x57B9
+#define E1000_DEV_ID_PCH_NVL_I219_V29       0x57BA
 
 #define E1000_REVISION_4	4
 
@@ -163,7 +173,10 @@ enum e1000_mac_type {
 	e1000_pch_cnp,
     e1000_pch_tgp,
     e1000_pch_adp,
-
+    e1000_pch_mtp,
+    e1000_pch_lnp,
+    e1000_pch_ptp,
+    e1000_pch_nvp,
 };
 
 enum e1000_media_type {
@@ -624,37 +637,39 @@ struct e1000_mac_info {
 };
 
 struct e1000_phy_info {
-	struct e1000_phy_operations ops;
+    struct e1000_phy_operations ops;
 
-	enum e1000_phy_type type;
+    enum e1000_phy_type type;
 
-	enum e1000_1000t_rx_status local_rx;
-	enum e1000_1000t_rx_status remote_rx;
-	enum e1000_ms_type ms_type;
-	enum e1000_ms_type original_ms_type;
-	enum e1000_rev_polarity cable_polarity;
-	enum e1000_smart_speed smart_speed;
+    enum e1000_1000t_rx_status local_rx;
+    enum e1000_1000t_rx_status remote_rx;
+    enum e1000_ms_type ms_type;
+    enum e1000_ms_type original_ms_type;
+    enum e1000_rev_polarity cable_polarity;
+    enum e1000_smart_speed smart_speed;
 
-	u32 addr;
-	u32 id;
-	u32 reset_delay_us;	/* in usec */
-	u32 revision;
+    u32 addr;
+    u32 id;
+    u32 reset_delay_us;    /* in usec */
+    u32 revision;
+    u32 retry_count;
 
-	enum e1000_media_type media_type;
+    enum e1000_media_type media_type;
 
-	u16 autoneg_advertised;
-	u16 autoneg_mask;
-	u16 cable_length;
-	u16 max_cable_length;
-	u16 min_cable_length;
+    u16 autoneg_advertised;
+    u16 autoneg_mask;
+    u16 cable_length;
+    u16 max_cable_length;
+    u16 min_cable_length;
 
-	u8 mdix;
+    u8 mdix;
 
-	bool disable_polarity_correction;
-	bool is_mdix;
-	bool polarity_correction;
-	bool speed_downgraded;
-	bool autoneg_wait_to_complete;
+    bool disable_polarity_correction;
+    bool is_mdix;
+    bool polarity_correction;
+    bool speed_downgraded;
+    bool autoneg_wait_to_complete;
+    bool retry_enabled;
 };
 
 struct e1000_nvm_info {
