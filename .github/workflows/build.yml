@@ -1,0 +1,221 @@
+name: Build IntelMausiEthernet
+
+# 触发方式：
+#   1) 网页手动跑：Actions -> Build IntelMausiEthernet -> Run workflow
+#   2) 往 master / main 推提交
+#   3) 发 Release（只产 Artifact，不自动发布到 Release 页）
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # 两个都是 x86_64 原生镜像，编出来的就是 x86_64 kext。
+        # macos-26-intel = Xcode 26.6 / macOS 26 SDK，和你的 Tahoe 26.6 对齐。
+        # macos-15-intel = Xcode 16.x，留作兜底：万一 26 的新 clang 对这份老代码更严格，
+        # 这份能过就先拿这份用（kext 的部署目标是 10.15，两边的产物都能在你的机器上加载）。
+        # 万一两个都报 "No runner matching the specified labels"，说明你的账号
+        # 用不了 Intel 镜像，那就换成 macos-latest（arm64，交叉编 x86_64 一样能出）。
+        runner:
+          - macos-26-intel
+          - macos-15-intel
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show commit
+        shell: bash
+        run: |
+          set -eu
+          git log -1 --format='%H%n%ad%n%s' --date=iso
+          echo "--- 确认新硬件 ID 在源码里 ---"
+          grep -n '0x57A1' IntelMausiEthernet/hw.h || echo "(没找到 E1000_DEV_ID_PCH_ARL_I219_V24)"
+
+      # 工程文件里 KERNEL_FRAMEWORK_HEADERS / KERNEL_EXTENSION_HEADER_SEARCH_PATHS
+      # 都硬编码成 $(PROJECT_DIR)/MacKernelSDK/Headers，但上游仓库里并没有这个目录
+      # （它不在 .gitmodules 里，作者是本机放好的）。所以必须自己拉一份放到位。
+      - name: Checkout MacKernelSDK
+        uses: actions/checkout@v4
+        with:
+          repository: acidanthera/MacKernelSDK
+          path: MacKernelSDK
+
+      - name: Show toolchain
+        shell: bash
+        run: |
+          set -eu
+          sw_vers
+          echo "--- xcodebuild ---"
+          xcodebuild -version
+          echo "--- developer dir ---"
+          xcode-select -p
+          echo "--- SDK ---"
+          xcrun --sdk macosx --show-sdk-path
+          echo "--- MacKernelSDK ---"
+          ls -1 MacKernelSDK
+          # 这两个是编译的硬前提，缺了直接报错，别等到 xcodebuild 输出几百行再找
+          test -d MacKernelSDK/Headers/kern || { echo "::error::MacKernelSDK/Headers/kern 缺失"; exit 1; }
+          test -d MacKernelSDK/Headers/IOKit || { echo "::error::MacKernelSDK/Headers/IOKit 缺失"; exit 1; }
+          test -f MacKernelSDK/Library/x86_64/libkmod.a || { echo "::error::MacKernelSDK/Library/x86_64/libkmod.a 缺失"; exit 1; }
+
+      # 上游工程把 libkmod.a 指向 SDKROOT/usr/lib/libkmod.a（2015 年的老写法）。
+      # Xcode 16 起 macOS SDK 里已经没有这个文件了，acidanthera 全家桶都改成直接引用
+      # MacKernelSDK 里自带的 x86_64 版。这里等价地改一下，只改 CI 里的临时副本，
+      # 不碰仓库本身。
+      - name: Retarget libkmod
+        shell: bash
+        run: |
+          set -eu
+          F=IntelMausiEthernet.xcodeproj/project.pbxproj
+          if grep -q 'MacKernelSDK/Library/x86_64/libkmod.a' "$F"; then
+            echo "已经指向 MacKernelSDK，跳过"
+            exit 0
+          fi
+          /usr/bin/sed -i '' \
+            's|path = usr/lib/libkmod.a; sourceTree = SDKROOT;|path = MacKernelSDK/Library/x86_64/libkmod.a; sourceTree = "<group>";|' \
+            "$F"
+          if ! grep -q 'MacKernelSDK/Library/x86_64/libkmod.a' "$F"; then
+            echo "::error::改写 pbxproj 失败，上游可能改动了这一行"
+            grep -n 'libkmod' "$F" || true
+            exit 1
+          fi
+          grep -n 'libkmod.a' "$F" | sed 's/^/  /'
+
+      - name: List targets
+        shell: bash
+        run: xcodebuild -list -project IntelMausiEthernet.xcodeproj
+
+      # 确认 MacKernelSDK 真的被工程认到了。这三行不对就别指望编过。
+      - name: Show key build settings
+        shell: bash
+        run: |
+          set -eu
+          xcodebuild -showBuildSettings \
+            -project IntelMausiEthernet.xcodeproj \
+            -target IntelMausiEthernet \
+            -configuration Release 2>/dev/null \
+          | grep -E '^[[:space:]]+(KERNEL_FRAMEWORK_HEADERS|KERNEL_EXTENSION_HEADER_SEARCH_PATHS|ARCHS|SDKROOT|MACOSX_DEPLOYMENT_TARGET|CONFIGURATION_BUILD_DIR|PRODUCT_NAME|MODULE_VERSION) =' \
+          | sed 's/^ */  /'
+          echo "--- 头目录 / 库是否真有东西 ---"
+          for f in MacKernelSDK/Headers/kern/assert.h MacKernelSDK/Headers/IOKit/IOService.h \
+                   MacKernelSDK/Headers/libkern/libkern.h MacKernelSDK/Library/x86_64/libkmod.a; do
+            if [ -f "$f" ]; then
+              echo "  ✔ $f ($(wc -c < "$f" | tr -d ' ') 字节)"
+            else
+              echo "  ✘ 缺 $f"
+            fi
+          done
+
+      # 用 -target 而不是 -scheme：scheme 只存在于
+      # IntelMausiEthernet.xcodeproj/xcuserdata/laura.xcuserdatad/xcschemes/ 下，
+      # CI 上的用户不是 "laura"，-scheme 大概率解析不到。
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project IntelMausiEthernet.xcodeproj \
+            -target IntelMausiEthernet \
+            -configuration Release \
+            -arch x86_64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CONFIGURATION_BUILD_DIR="$PWD/build" \
+            build 2>&1 | tee build.log
+
+      # kext 必须带签名才能被 OpenCore 加载。CI 上没有开发者证书，
+      # 用 ad-hoc（-）签一下就够，OpenCore 认这种。
+      - name: Ad-hoc sign
+        shell: bash
+        run: |
+          set -eu
+          K=build/IntelMausiEthernet.kext
+          test -d "$K" || { echo "::error::没找到 $K"; exit 1; }
+          codesign --force --deep --sign - "$K"
+          codesign -dv --verbose=4 "$K" 2>&1 | tee codesign.txt
+          codesign --verify --strict --verbose=2 "$K" 2>&1 | tee -a codesign.txt
+
+      - name: Verify
+        shell: bash
+        run: |
+          set -eu
+          K=build/IntelMausiEthernet.kext
+          B="$K/Contents/MacOS/IntelMausiEthernet"
+          P="$K/Contents/Info.plist"
+
+          echo "== 版本 =="
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$P"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$P"
+
+          echo "== 架构 =="
+          lipo -archs "$B"
+          case "$(lipo -archs "$B")" in
+            *x86_64*) echo "  ✔ 含 x86_64" ;;
+            *) echo "::error::产物不是 x86_64"; exit 1 ;;
+          esac
+
+          echo "== 结构 =="
+          find "$K" -type f | sort | sed 's/^/  /'
+          du -sh "$K"
+
+          echo "== 关键：0x57A18086 (I219-V / Arrow Lake-LP, 800 系) 是否在匹配表里 =="
+          if /usr/libexec/PlistBuddy -c 'Print :IOKitPersonalities:IntelMausi:IOPCIMatch' "$P" \
+               | tr ' ' '\n' | grep -qi '^0x57a18086$'; then
+            echo "  ✔ 在。这就是开发者新加的那条，编的是新代码"
+          else
+            echo "::error::0x57A18086 不在 IOPCIMatch 里 —— 拉到的不是新版源码"
+            exit 1
+          fi
+
+      - name: Package
+        id: pack
+        shell: bash
+        run: |
+          set -eu
+          K=build/IntelMausiEthernet.kext
+          P="$K/Contents/Info.plist"
+          VER=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$P")
+          BLD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$P")
+          ARCH=$(lipo -archs "$K/Contents/MacOS/IntelMausiEthernet" | tr ' ' '_')
+          NAME="IntelMausiEthernet-${VER}-${BLD}-RELEASE-${ARCH}"
+
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent "$K" "dist/${NAME}.zip"
+          ( cd dist && shasum -a 256 "${NAME}.zip" > "${NAME}.zip.sha256" )
+
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+          ls -lh dist
+
+      - name: Upload kext
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.name }}-${{ matrix.runner }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      # 编译挂了也要能拿到日志，否则只能从网页控制台里翻
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.runner }}
+          path: |
+            build.log
+            codesign.txt
+          if-no-files-found: ignore
+          retention-days: 14
